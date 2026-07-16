@@ -280,10 +280,16 @@
     <div class="card-label">Import secret key</div>
     <label>Secret key (starts with S)</label>
     <input id="importSecretInput" type="password" placeholder="S...">
-    <label>Set a password to encrypt this key for storage</label>
-    <input id="importPassword" type="password" placeholder="Choose a strong password">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;text-transform:none;letter-spacing:0;font-size:13px;">
+      <input type="checkbox" id="noSaveCheckbox" style="width:auto;" onchange="toggleNoSave()">
+      Use for this session only — don't save a keystore file
+    </label>
+    <div id="importPasswordBlock">
+      <label>Set a password to encrypt this key for storage</label>
+      <input id="importPassword" type="password" placeholder="Choose a strong password">
+    </div>
     <div class="field-actions">
-      <button class="btn-brass btn-block" onclick="doImportSecret()">Encrypt & continue</button>
+      <button class="btn-brass btn-block" onclick="doImportSecret()">Continue</button>
     </div>
     <button class="btn-ghost btn-block" style="margin-top:10px;" onclick="showStart()">Back</button>
   </div>
@@ -433,14 +439,26 @@ async function finishCreate(){
   setStatus('Wallet created. Keystore file downloaded — keep it and your password safe.', 'ok');
 }
 
+function toggleNoSave(){
+  const noSave = document.getElementById('noSaveCheckbox').checked;
+  document.getElementById('importPasswordBlock').classList.toggle('hidden', noSave);
+}
+
 /* ---------- Import secret ---------- */
 async function doImportSecret(){
   const secret = document.getElementById('importSecretInput').value.trim();
+  const noSave = document.getElementById('noSaveCheckbox').checked;
   const pw = document.getElementById('importPassword').value;
   try{
     keypair = StellarSdk.Keypair.fromSecret(secret);
   }catch(e){
     setStatus('That does not look like a valid secret key.', 'err'); return;
+  }
+  if(noSave){
+    document.getElementById('importSecretInput').value = '';
+    showWallet();
+    setStatus('Loaded for this session only. Nothing was saved — locking will clear it from memory.', 'ok');
+    return;
   }
   if(!pw || pw.length < 8){ setStatus('Choose a password of at least 8 characters.', 'err'); return; }
   await downloadKeystore(keypair, pw);
@@ -516,6 +534,11 @@ function lockWallet(){
   document.getElementById('panelWallet').classList.add('hidden');
   document.getElementById('panelTabs').classList.add('hidden');
   document.getElementById('unlockPassword').value = '';
+  document.getElementById('importSecretInput').value = '';
+  document.getElementById('importPassword').value = '';
+  document.getElementById('sendDest').value = '';
+  document.getElementById('sendAmount').value = '';
+  document.getElementById('sendMemo').value = '';
   setStatus('Wallet locked. Key cleared from memory.', 'info');
   showStart();
 }
@@ -577,23 +600,42 @@ async function prepareSend(){
   if(!StellarSdk.StrKey.isValidEd25519PublicKey(dest)){ setStatus('Destination address is not valid.', 'err'); return; }
   if(!amount || Number(amount) <= 0){ setStatus('Enter an amount greater than 0.', 'err'); return; }
 
-  setStatus('Building transaction…', 'info');
+  setStatus('Checking destination and building transaction…', 'info');
   try{
     const accJson = await loadAccount(keypair.publicKey());
     const account = new StellarSdk.Account(keypair.publicKey(), accJson.sequence);
+
+    // Check whether the destination already exists on the ledger.
+    let destExists = true;
+    try{
+      await loadAccount(dest);
+    }catch(e){
+      destExists = false;
+    }
+
     const builder = new StellarSdk.TransactionBuilder(account, {
       fee: StellarSdk.BASE_FEE,
       networkPassphrase: passphrase()
-    }).addOperation(StellarSdk.Operation.payment({
-      destination: dest,
-      asset: StellarSdk.Asset.native(),
-      amount: amount
-    }));
+    });
+
+    if(destExists){
+      builder.addOperation(StellarSdk.Operation.payment({
+        destination: dest,
+        asset: StellarSdk.Asset.native(),
+        amount: amount
+      }));
+    } else {
+      builder.addOperation(StellarSdk.Operation.createAccount({
+        destination: dest,
+        startingBalance: amount
+      }));
+    }
     if(memo) builder.addMemo(StellarSdk.Memo.text(memo.slice(0,28)));
     pendingTx = builder.setTimeout(180).build();
 
     document.getElementById('confirmSummary').innerHTML =
       `<strong>To:</strong> ${dest}<br>` +
+      (destExists ? '' : `<strong>Note:</strong> This address doesn't exist yet — this transaction will create and fund it.<br>`) +
       `<strong>Amount:</strong> ${amount} PI<br>` +
       (memo ? `<strong>Memo:</strong> ${memo}<br>` : '') +
       `<strong>Fee:</strong> ${StellarSdk.BASE_FEE} stroops`;
