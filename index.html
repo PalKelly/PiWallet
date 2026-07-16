@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Passbook · Pi Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stellar-sdk@latest/lib/index.min.js"></script>
+<style>
+  :root{
+    --ink:#10201B;
+    --ink-2:#152722;
+    --parchment:#F2ECDC;
+    --parchment-2:#E8E0CB;
+    --brass:#B08D3D;
+    --brass-2:#C9A54D;
+    --moss:#3F6B4F;
+    --rust:#8C3B2E;
+    --graphite:#3A3F3D;
+    --graphite-soft:#6B6357;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1B332B 0%, var(--ink) 55%);
+    color:var(--parchment);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:28px 16px 60px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .book{
+    width:100%;
+    max-width:420px;
+  }
+  .masthead{
+    text-align:center;
+    margin-bottom:22px;
+  }
+  .masthead .eyebrow{
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--brass-2);
+    font-weight:600;
+  }
+  .masthead h1{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:26px;
+    margin:4px 0 0;
+    letter-spacing:.01em;
+  }
+
+  /* --- Signature element: the seal / lock --- */
+  .seal-row{
+    display:flex;
+    justify-content:center;
+    margin:18px 0 20px;
+  }
+  .seal{
+    width:64px;height:64px;border-radius:50%;
+    background:radial-gradient(circle at 34% 30%, var(--brass-2), var(--brass) 60%, #8f701f 100%);
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+    box-shadow:0 6px 18px rgba(176,141,61,.35), inset 0 0 0 2px rgba(255,255,255,.18);
+    cursor:pointer;
+    transition:transform .25s ease;
+  }
+  .seal:active{transform:scale(.94);}
+  .seal svg{width:26px;height:26px;transition:opacity .2s ease, transform .3s ease;}
+  .seal .shackle{transform-origin:50% 70%;transition:transform .3s ease;}
+  .seal.unlocked .shackle{transform:translateY(-3px) rotate(-18deg);}
+  .seal-label{
+    text-align:center;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--graphite-soft);
+    margin-top:8px;
+  }
+
+  .card{
+    background:linear-gradient(180deg, var(--parchment), var(--parchment-2));
+    color:var(--graphite);
+    border-radius:14px;
+    padding:22px 20px;
+    box-shadow:0 20px 40px rgba(0,0,0,.35);
+    position:relative;
+    overflow:hidden;
+  }
+  .card + .card{margin-top:14px;}
+  .card::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:repeating-linear-gradient(180deg, rgba(58,63,61,.05) 0 1px, transparent 1px 28px);
+    pointer-events:none;
+  }
+  .card-label{
+    font-size:10px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--graphite-soft);
+    margin-bottom:10px;
+    font-weight:600;
+  }
+
+  .balance-figure{
+    font-family:'Fraunces',serif;
+    font-size:42px;
+    font-variant-numeric:tabular-nums;
+    line-height:1;
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .balance-figure small{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;color:var(--graphite-soft);}
+  .balance-sub{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--graphite-soft);margin-top:6px;}
+
+  .addr-box{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    word-break:break-all;
+    background:rgba(58,63,61,.06);
+    border:1px dashed rgba(58,63,61,.3);
+    border-radius:8px;
+    padding:12px;
+    line-height:1.5;
+  }
+
+  .row{display:flex;gap:10px;margin-top:12px;}
+  .row.stack{flex-direction:column;}
+
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    border:none;
+    border-radius:9px;
+    padding:12px 14px;
+    cursor:pointer;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  button:active{transform:translateY(1px);}
+  .btn-brass{background:var(--brass);color:#241a06;}
+  .btn-brass:hover{filter:brightness(1.06);}
+  .btn-moss{background:var(--moss);color:#eefbf1;}
+  .btn-rust{background:var(--rust);color:#fdece9;}
+  .btn-ghost{background:transparent;color:var(--graphite);border:1px solid rgba(58,63,61,.35);}
+  .btn-block{width:100%;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+
+  label{
+    display:block;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--graphite-soft);
+    margin:12px 0 6px;
+    font-weight:600;
+  }
+  input, textarea{
+    width:100%;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    padding:11px 12px;
+    border-radius:8px;
+    border:1px solid rgba(58,63,61,.3);
+    background:#fff;
+    color:var(--graphite);
+  }
+  input:focus, textarea:focus, button:focus-visible{
+    outline:2px solid var(--brass);
+    outline-offset:1px;
+  }
+
+  .tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .tab{
+    flex:1;
+    text-align:center;
+    padding:10px;
+    border-radius:8px;
+    background:rgba(58,63,61,.06);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--graphite-soft);
+  }
+  .tab.active{background:var(--ink);color:var(--parchment);}
+
+  .hidden{display:none !important;}
+
+  .status{
+    font-size:12.5px;
+    line-height:1.5;
+    padding:10px 12px;
+    border-radius:8px;
+    margin-top:12px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .status.info{background:rgba(58,63,61,.08);color:var(--graphite);}
+  .status.ok{background:rgba(63,107,79,.12);color:var(--moss);}
+  .status.err{background:rgba(140,59,46,.12);color:var(--rust);}
+
+  .divider{height:1px;background:rgba(58,63,61,.18);margin:16px 0;}
+  .fine{font-size:11.5px;color:var(--graphite-soft);line-height:1.5;margin-top:8px;}
+  .fine a{color:var(--graphite-soft);}
+
+  .field-actions{display:flex;gap:8px;margin-top:8px;}
+  .field-actions button{flex:1;}
+
+  .settings-toggle{
+    text-align:center;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--graphite-soft);
+    margin-top:14px;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<div class="book">
+
+  <div class="masthead">
+    <div class="eyebrow">Self-custodial &middot; No server</div>
+    <h1>Passbook</h1>
+  </div>
+
+  <div class="seal-row">
+    <div>
+      <div id="seal" class="seal">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect class="body" x="5" y="10" width="14" height="10" rx="2" fill="#241a06"/>
+          <path class="shackle" d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#241a06" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div id="sealLabel" class="seal-label">Sealed</div>
+    </div>
+  </div>
+
+  <!-- ===== NO KEY LOADED ===== -->
+  <div id="panelStart" class="card">
+    <div class="card-label">Set up your wallet</div>
+    <p class="fine" style="margin-top:0;">Your key is generated and signed on this device only. Nothing is sent anywhere except signed transactions, and only when you tap Send.</p>
+    <div class="row stack">
+      <button class="btn-brass btn-block" onclick="showCreate()">Generate a new wallet</button>
+      <button class="btn-ghost btn-block" onclick="showImportSecret()">Import an existing secret key</button>
+      <button class="btn-ghost btn-block" onclick="showUnlock()">Unlock from a keystore file</button>
+    </div>
+  </div>
+
+  <!-- Create flow -->
+  <div id="panelCreate" class="card hidden">
+    <div class="card-label">New wallet</div>
+    <div id="createSecretBox" class="hidden">
+      <p class="fine" style="margin-top:0;color:var(--rust);font-weight:600;">Write this secret key down before continuing. It is shown once. Anyone with it can spend your Pi.</p>
+      <div class="addr-box" id="newSecretDisplay"></div>
+      <label>Set a password to encrypt this key for storage</label>
+      <input id="createPassword" type="password" placeholder="Choose a strong password">
+      <div class="field-actions">
+        <button class="btn-brass btn-block" onclick="finishCreate()">I've saved it — encrypt & continue</button>
+      </div>
+    </div>
+    <div id="createStartBox">
+      <p class="fine" style="margin-top:0;">This creates a brand new Pi address. It starts empty — it must receive a minimum balance before it's active on the network.</p>
+      <button class="btn-brass btn-block" onclick="doGenerate()">Generate keypair</button>
+    </div>
+    <button class="btn-ghost btn-block" style="margin-top:10px;" onclick="showStart()">Back</button>
+  </div>
+
+  <!-- Import secret flow -->
+  <div id="panelImport" class="card hidden">
+    <div class="card-label">Import secret key</div>
+    <label>Secret key (starts with S)</label>
+    <input id="importSecretInput" type="password" placeholder="S...">
+    <label>Set a password to encrypt this key for storage</label>
+    <input id="importPassword" type="password" placeholder="Choose a strong password">
+    <div class="field-actions">
+      <button class="btn-brass btn-block" onclick="doImportSecret()">Encrypt & continue</button>
+    </div>
+    <button class="btn-ghost btn-block" style="margin-top:10px;" onclick="showStart()">Back</button>
+  </div>
+
+  <!-- Unlock from keystore -->
+  <div id="panelUnlock" class="card hidden">
+    <div class="card-label">Unlock keystore</div>
+    <label>Keystore file</label>
+    <input id="keystoreFile" type="file" accept="application/json">
+    <label>Or paste keystore JSON</label>
+    <textarea id="keystorePaste" rows="3" placeholder="{ &quot;publicKey&quot;: ... }"></textarea>
+    <label>Password</label>
+    <input id="unlockPassword" type="password" placeholder="Your password">
+    <div class="field-actions">
+      <button class="btn-brass btn-block" onclick="doUnlock()">Unlock</button>
+    </div>
+    <button class="btn-ghost btn-block" style="margin-top:10px;" onclick="showStart()">Back</button>
+  </div>
+
+  <!-- ===== UNLOCKED WALLET ===== -->
+  <div id="panelWallet" class="card hidden">
+    <div class="card-label">Balance</div>
+    <div class="balance-figure" id="balanceFigure">— <small>PI</small></div>
+    <div class="balance-sub" id="balanceSub">Not checked yet</div>
+    <div class="row">
+      <button class="btn-ghost btn-block" onclick="refreshBalance()">Refresh</button>
+      <button class="btn-rust" onclick="lockWallet()">Lock</button>
+    </div>
+  </div>
+
+  <div id="panelTabs" class="card hidden">
+    <div class="tabs">
+      <div class="tab active" id="tabReceive" onclick="switchTab('receive')">Receive</div>
+      <div class="tab" id="tabSend" onclick="switchTab('send')">Send</div>
+    </div>
+
+    <div id="viewReceive">
+      <p class="fine" style="margin-top:0;">Share this address to receive Pi. It's safe to give out publicly.</p>
+      <div class="addr-box" id="myAddress">—</div>
+      <div class="field-actions">
+        <button class="btn-brass btn-block" onclick="copyAddress()">Copy address</button>
+      </div>
+    </div>
+
+    <div id="viewSend" class="hidden">
+      <label>Destination address</label>
+      <input id="sendDest" placeholder="G...">
+      <label>Amount (PI)</label>
+      <input id="sendAmount" placeholder="0.0000000">
+      <label>Memo (optional)</label>
+      <input id="sendMemo" placeholder="Up to 28 characters">
+      <div class="field-actions">
+        <button class="btn-moss btn-block" onclick="prepareSend()">Review transaction</button>
+      </div>
+      <div id="confirmBox" class="hidden">
+        <div class="divider"></div>
+        <div class="fine" id="confirmSummary" style="color:var(--graphite);"></div>
+        <div class="field-actions">
+          <button class="btn-rust btn-block" onclick="doSend()">Confirm & sign</button>
+          <button class="btn-ghost btn-block" onclick="cancelSend()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusArea"></div>
+
+  <div class="settings-toggle" onclick="toggleSettings()">Network settings</div>
+  <div id="panelSettings" class="card hidden">
+    <div class="card-label">Network</div>
+    <label>Horizon URL</label>
+    <input id="horizonUrl" placeholder="https://... (get this from Pi Laboratory)">
+    <label>Network passphrase</label>
+    <input id="networkPassphrase" value="Pi Network">
+    <p class="fine">Confirm the Horizon URL against Pi's own Laboratory tool before sending real funds. Use the Testnet passphrase ("Pi Testnet") with a testnet Horizon URL to rehearse first.</p>
+  </div>
+
+</div>
+
+<script>
+Telegram?.WebApp?.ready?.();
+Telegram?.WebApp?.expand?.();
+
+let keypair = null;     // StellarSdk.Keypair, only ever in memory
+let pendingXDR = null;
+let pendingTx = null;
+
+function setStatus(msg, kind){
+  const el = document.getElementById('statusArea');
+  el.innerHTML = `<div class="status ${kind}">${msg}</div>`;
+}
+
+function setSealed(unlocked){
+  document.getElementById('seal').classList.toggle('unlocked', unlocked);
+  document.getElementById('sealLabel').textContent = unlocked ? 'Unlocked' : 'Sealed';
+}
+
+function showStart(){ swap('panelStart'); }
+function showCreate(){ swap('panelCreate'); document.getElementById('createSecretBox').classList.add('hidden'); document.getElementById('createStartBox').classList.remove('hidden'); }
+function showImportSecret(){ swap('panelImport'); }
+function showUnlock(){ swap('panelUnlock'); }
+
+function swap(id){
+  ['panelStart','panelCreate','panelImport','panelUnlock'].forEach(p=>{
+    document.getElementById(p).classList.toggle('hidden', p!==id);
+  });
+  document.getElementById('panelWallet').classList.add('hidden');
+  document.getElementById('panelTabs').classList.add('hidden');
+}
+
+function showWallet(){
+  ['panelStart','panelCreate','panelImport','panelUnlock'].forEach(p=>document.getElementById(p).classList.add('hidden'));
+  document.getElementById('panelWallet').classList.remove('hidden');
+  document.getElementById('panelTabs').classList.remove('hidden');
+  document.getElementById('myAddress').textContent = keypair.publicKey();
+  setSealed(true);
+  refreshBalance();
+}
+
+function toggleSettings(){
+  document.getElementById('panelSettings').classList.toggle('hidden');
+}
+
+/* ---------- Create ---------- */
+function doGenerate(){
+  keypair = StellarSdk.Keypair.random();
+  document.getElementById('newSecretDisplay').textContent = keypair.secret();
+  document.getElementById('createStartBox').classList.add('hidden');
+  document.getElementById('createSecretBox').classList.remove('hidden');
+}
+
+async function finishCreate(){
+  const pw = document.getElementById('createPassword').value;
+  if(!pw || pw.length < 8){ setStatus('Choose a password of at least 8 characters.', 'err'); return; }
+  await downloadKeystore(keypair, pw);
+  showWallet();
+  setStatus('Wallet created. Keystore file downloaded — keep it and your password safe.', 'ok');
+}
+
+/* ---------- Import secret ---------- */
+async function doImportSecret(){
+  const secret = document.getElementById('importSecretInput').value.trim();
+  const pw = document.getElementById('importPassword').value;
+  try{
+    keypair = StellarSdk.Keypair.fromSecret(secret);
+  }catch(e){
+    setStatus('That does not look like a valid secret key.', 'err'); return;
+  }
+  if(!pw || pw.length < 8){ setStatus('Choose a password of at least 8 characters.', 'err'); return; }
+  await downloadKeystore(keypair, pw);
+  showWallet();
+  setStatus('Key imported. Keystore file downloaded — keep it and your password safe.', 'ok');
+}
+
+/* ---------- Keystore encrypt / decrypt (WebCrypto, AES-GCM + PBKDF2) ---------- */
+async function deriveKey(password, saltBytes){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt:saltBytes, iterations:210000, hash:'SHA-256' },
+    baseKey,
+    { name:'AES-GCM', length:256 },
+    false,
+    ['encrypt','decrypt']
+  );
+}
+
+function b64(bytes){ return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
+function unb64(str){ return Uint8Array.from(atob(str), c=>c.charCodeAt(0)); }
+
+async function downloadKeystore(kp, password){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(kp.secret()));
+  const keystore = {
+    version: 1,
+    publicKey: kp.publicKey(),
+    salt: b64(salt),
+    iv: b64(iv),
+    ciphertext: b64(ciphertext)
+  };
+  const blob = new Blob([JSON.stringify(keystore, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pi-wallet-keystore-${kp.publicKey().slice(0,6)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+async function doUnlock(){
+  const pw = document.getElementById('unlockPassword').value;
+  const fileInput = document.getElementById('keystoreFile');
+  const pasted = document.getElementById('keystorePaste').value.trim();
+  try{
+    let keystore;
+    if(fileInput.files && fileInput.files[0]){
+      const text = await fileInput.files[0].text();
+      keystore = JSON.parse(text);
+    } else if(pasted){
+      keystore = JSON.parse(pasted);
+    } else {
+      setStatus('Choose a keystore file or paste keystore JSON.', 'err'); return;
+    }
+    const key = await deriveKey(pw, unb64(keystore.salt));
+    const plainBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(keystore.iv)}, key, unb64(keystore.ciphertext));
+    const secret = new TextDecoder().decode(plainBuf);
+    keypair = StellarSdk.Keypair.fromSecret(secret);
+    showWallet();
+    setStatus('Wallet unlocked for this session.', 'ok');
+  }catch(e){
+    setStatus('Could not unlock — check the file and password.', 'err');
+  }
+}
+
+function lockWallet(){
+  keypair = null;
+  pendingXDR = null; pendingTx = null;
+  setSealed(false);
+  document.getElementById('panelWallet').classList.add('hidden');
+  document.getElementById('panelTabs').classList.add('hidden');
+  document.getElementById('unlockPassword').value = '';
+  setStatus('Wallet locked. Key cleared from memory.', 'info');
+  showStart();
+}
+
+/* ---------- Network helpers ---------- */
+function horizon(){ return document.getElementById('horizonUrl').value.trim().replace(/\/$/,''); }
+function passphrase(){ return document.getElementById('networkPassphrase').value; }
+
+async function loadAccount(publicKey){
+  const url = `${horizon()}/accounts/${publicKey}`;
+  const res = await fetch(url);
+  if(!res.ok){
+    if(res.status === 404) throw new Error('Account not found on this network yet — it needs to receive a minimum balance first.');
+    throw new Error(`Horizon error ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ---------- Balance ---------- */
+async function refreshBalance(){
+  if(!keypair) return;
+  if(!horizon()){ setStatus('Set the Horizon URL under Network settings first.', 'err'); return; }
+  setStatus('Checking balance…', 'info');
+  try{
+    const acc = await loadAccount(keypair.publicKey());
+    const native = acc.balances.find(b => b.asset_type === 'native');
+    document.getElementById('balanceFigure').innerHTML = `${native ? Number(native.balance).toLocaleString(undefined,{minimumFractionDigits:4,maximumFractionDigits:7}) : '0'} <small>PI</small>`;
+    document.getElementById('balanceSub').textContent = `Sequence ${acc.sequence}`;
+    setStatus('Balance updated.', 'ok');
+  }catch(e){
+    document.getElementById('balanceFigure').innerHTML = `— <small>PI</small>`;
+    setStatus(e.message, 'err');
+  }
+}
+
+/* ---------- Tabs / receive / send ---------- */
+function switchTab(which){
+  document.getElementById('tabReceive').classList.toggle('active', which==='receive');
+  document.getElementById('tabSend').classList.toggle('active', which==='send');
+  document.getElementById('viewReceive').classList.toggle('hidden', which!=='receive');
+  document.getElementById('viewSend').classList.toggle('hidden', which!=='send');
+}
+
+async function copyAddress(){
+  try{
+    await navigator.clipboard.writeText(keypair.publicKey());
+    setStatus('Address copied.', 'ok');
+  }catch(e){
+    setStatus('Could not copy automatically — select and copy the address manually.', 'err');
+  }
+}
+
+async function prepareSend(){
+  const dest = document.getElementById('sendDest').value.trim();
+  const amount = document.getElementById('sendAmount').value.trim();
+  const memo = document.getElementById('sendMemo').value.trim();
+
+  if(!horizon()){ setStatus('Set the Horizon URL under Network settings first.', 'err'); return; }
+  if(!StellarSdk.StrKey.isValidEd25519PublicKey(dest)){ setStatus('Destination address is not valid.', 'err'); return; }
+  if(!amount || Number(amount) <= 0){ setStatus('Enter an amount greater than 0.', 'err'); return; }
+
+  setStatus('Building transaction…', 'info');
+  try{
+    const accJson = await loadAccount(keypair.publicKey());
+    const account = new StellarSdk.Account(keypair.publicKey(), accJson.sequence);
+    const builder = new StellarSdk.TransactionBuilder(account, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: passphrase()
+    }).addOperation(StellarSdk.Operation.payment({
+      destination: dest,
+      asset: StellarSdk.Asset.native(),
+      amount: amount
+    }));
+    if(memo) builder.addMemo(StellarSdk.Memo.text(memo.slice(0,28)));
+    pendingTx = builder.setTimeout(180).build();
+
+    document.getElementById('confirmSummary').innerHTML =
+      `<strong>To:</strong> ${dest}<br>` +
+      `<strong>Amount:</strong> ${amount} PI<br>` +
+      (memo ? `<strong>Memo:</strong> ${memo}<br>` : '') +
+      `<strong>Fee:</strong> ${StellarSdk.BASE_FEE} stroops`;
+    document.getElementById('confirmBox').classList.remove('hidden');
+    setStatus('Review the details, then confirm to sign and submit.', 'info');
+  }catch(e){
+    setStatus(e.message, 'err');
+  }
+}
+
+function cancelSend(){
+  pendingTx = null;
+  document.getElementById('confirmBox').classList.add('hidden');
+  setStatus('Send cancelled.', 'info');
+}
+
+async function doSend(){
+  if(!pendingTx){ setStatus('Nothing to send — build the transaction again.', 'err'); return; }
+  setStatus('Signing…', 'info');
+  try{
+    pendingTx.sign(keypair);
+    const xdr = pendingTx.toXDR();
+    setStatus('Submitting to the network…', 'info');
+    const res = await fetch(`${horizon()}/transactions`, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'tx=' + encodeURIComponent(xdr)
+    });
+    const body = await res.json();
+    if(!res.ok){
+      const detail = body.extras?.result_codes ? JSON.stringify(body.extras.result_codes) : (body.detail || 'Transaction failed.');
+      throw new Error(detail);
+    }
+    setStatus(`Sent. Ledger ${body.ledger}, hash ${body.hash.slice(0,12)}…`, 'ok');
+    document.getElementById('confirmBox').classList.add('hidden');
+    document.getElementById('sendDest').value = '';
+    document.getElementById('sendAmount').value = '';
+    document.getElementById('sendMemo').value = '';
+    pendingTx = null;
+    refreshBalance();
+  }catch(e){
+    setStatus('Send failed: ' + e.message, 'err');
+  }
+}
+</script>
+</body>
+</html>
