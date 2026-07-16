@@ -635,7 +635,7 @@ async function prepareSend(){
 
     document.getElementById('confirmSummary').innerHTML =
       `<strong>To:</strong> ${dest}<br>` +
-      (destExists ? '' : `<strong>Note:</strong> This address doesn't exist yet — this transaction will create and fund it.<br>`) +
+      (destExists ? '' : `<strong>Note:</strong> This address doesn't exist yet — this transaction will create and fund it. If ${amount} PI is below the network's minimum reserve to activate an account, this will fail.<br>`) +
       `<strong>Amount:</strong> ${amount} PI<br>` +
       (memo ? `<strong>Memo:</strong> ${memo}<br>` : '') +
       `<strong>Fee:</strong> ${StellarSdk.BASE_FEE} stroops`;
@@ -664,9 +664,19 @@ async function doSend(){
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:'tx=' + encodeURIComponent(xdr)
     });
-    const body = await res.json();
+    const rawText = await res.text();
+    let body;
+    try{ body = JSON.parse(rawText); }catch(e){ body = null; }
+
     if(!res.ok){
-      const detail = body.extras?.result_codes ? JSON.stringify(body.extras.result_codes) : (body.detail || 'Transaction failed.');
+      let detail;
+      if(body?.extras?.result_codes){
+        detail = JSON.stringify(body.extras.result_codes);
+      } else if(body?.detail){
+        detail = body.detail;
+      } else {
+        detail = `HTTP ${res.status} — raw response: ${rawText.slice(0,300)}`;
+      }
       throw new Error(detail);
     }
     setStatus(`Sent. Ledger ${body.ledger}, hash ${body.hash.slice(0,12)}…`, 'ok');
