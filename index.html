@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/stellar-sdk@latest/lib/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stellar-sdk/13.3.0/stellar-sdk.min.js"></script>
 <style>
   :root{
     --ink:#10201B;
@@ -367,6 +367,12 @@
 Telegram?.WebApp?.ready?.();
 Telegram?.WebApp?.expand?.();
 
+window.addEventListener('load', () => {
+  if (typeof StellarSdk === 'undefined') {
+    setStatus('The Stellar library failed to load from the CDN. Check your connection and reload — if it keeps happening, tell Claude.', 'err');
+  }
+});
+
 let keypair = null;     // StellarSdk.Keypair, only ever in memory
 let pendingXDR = null;
 let pendingTx = null;
@@ -409,6 +415,10 @@ function toggleSettings(){
 
 /* ---------- Create ---------- */
 function doGenerate(){
+  if (typeof StellarSdk === 'undefined') {
+    setStatus('The Stellar library has not loaded yet. Wait a moment and try again, or reload the page.', 'err');
+    return;
+  }
   keypair = StellarSdk.Keypair.random();
   document.getElementById('newSecretDisplay').textContent = keypair.secret();
   document.getElementById('createStartBox').classList.add('hidden');
